@@ -11,7 +11,7 @@ Also included in this document is a brief overview of the features and how to ru
 Version 1.0
 
 ### HydroViewer2
-Version 2.0
+- Added support for DMT probes (e.g., CIP, PIP)
 
 ## Features
 
@@ -67,6 +67,9 @@ HydroViewer2 is run by following the steps below:
 ### HydroViewer
 -	Frame number in image filenames and frame numbers displayed above the image records do not directly correspond to the image record in the particle-by-particle data files (i.e., frame #1 corresponds to the second record number in the particle-by-particle data file)
 
+### HydroViewer2
+- When browsing through CIP/PIP image data using the previous/next buttons, the image record occasionally does not update --clicking the button again refreshes the display for an additional frame backward/forward
+
 ## Version History
 
 ### HydroViewer
@@ -74,5 +77,8 @@ Version 1.0
 -	Initial code release
 
 ### HydroViewer2
+Version 2.1
+- Added support for DMT probes (e.g., CIP, PIP)
+
 Version 2.0
 - Initial code release
