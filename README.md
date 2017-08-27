@@ -7,7 +7,7 @@ Also included in this document is a brief overview of the features and how to ru
 
 ## What's New
 
-### HydroViewer
+### SelectHydroViewer
 Version 1.0
 
 ### HydroViewer2
@@ -16,7 +16,20 @@ Version 1.0
 -	Moved input parameters towards beginning of the script and cleaned up some statements
 -	Allows reading of particle data files that don't have rectangular/elliptical morphological parameters
 
+### HydroViewer
+Version 1.0
+
 ## Features
+
+### SelectHydroViewer
+-	Builds image buffers from particles meeting user-specified criteria
+-	Images outputted as pixel-for-pixel representation to preserve quality
+-	Particles optionally restricted by start/end time, size, reject status, inter-arrival time, and habit
+
+### HydroViewer2
+-	Displays one image record at a time with buttons to toggle through the file
+-	Particle properties (e.g., maximum dimension, area, perimeter) shown after clicking on a particle within the image record
+-	Ability to save images of user-selected particles
 
 ### HydroViewer
 -	Displays 6 image records at once
@@ -24,10 +37,26 @@ Version 1.0
 -	Information on the frame number, time, and number of particles for each image record
 -	Option to overlay an asterisk every 5 particles (helpful when associating images to the particle-by-particle data
 
-### HydroViewer2
--	Displays one image record at a time with buttons to toggle through the file
--	Particle properties (e.g., maximum dimension, area, perimeter) shown after clicking on a particle within the image record
--	Ability to save images of user-selected particles
+## SelectHydroViewer Instructions
+SelectHydroViewer is designed to output image buffers, one at a time, that are built from user-specified criteria such as time and numerous particle properties. If very few restrictions are placed on which particles get plotted, please use HydroViewer instead (which supports parallel execution).
+
+The program has the following Python package dependencies: numpy, scipy, xarray
+
+SelectHydroViewer is called using the following arguments (\* denotes required):
+-	imageFile\*: path to decompressed data generated from read\_binary\_\* script in UIOPS
+-	particleFile\*: path to particle-by-particle data generated from imgProc_sm script
+-	plotDirectory\*: path to save image strips to file
+-	campaign\*: name of project (e.g., 'olympex'); allows for project-specific conditional statements to be added to plotting routines
+-	probeName\*: probe type ('2DS', 'HVPS', 'CIP', 'PIP'); used in determining image decryption methods specific to the manufacturer
+-	startTime: flight time (HHMMSS) to begin the plotting job
+-	endTime: flight time (HHMMSS) to end the plotting job
+-	rejStatus: array of rejection status values (from image\_auto\_reject variable) of which to plot particles; see script comments on lines 245-247 for available values
+-	minD: minimum particle size (mm) of which to plot particles
+-	maxD: maximum particle size (mm) of which to plot particles
+-	intArrThresh: minimum inter-arrival time (s) of which to plot particles
+-	habitStatus: array of habit type to use in particle plotting; see script comments on lines 256-257 for available values
+
+For help on running SelectHydroViewer in the background, follow the runSelectHydroViewer.sh script.
 
 ## HydroViewer Instructions
 
@@ -74,7 +103,7 @@ HydroViewer2 is run by following the steps below:
 
 ## Version History
 
-### HydroViewer
+### SelectHydroViewer
 Version 1.0
 -	Initial code release
 
@@ -89,4 +118,8 @@ Version 2.1
 -	Added support for DMT probes (e.g., CIP, PIP)
 
 Version 2.0
+-	Initial code release
+
+### HydroViewer
+Version 1.0
 -	Initial code release
