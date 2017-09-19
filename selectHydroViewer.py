@@ -143,7 +143,7 @@ def get_imageData(inFile, frameStart):
     
     return data
 
-def get_slice_endpoints(buf, boundary, boundaryTime, invalidSlice): # get slice start/end indices, and also for the boundaries
+def get_slice_endpoints(probeName, buf, boundary, boundaryTime, invalidSlice): # get slice start/end indices, and also for the boundaries
     numPart = 0 # number of particles in buffer
     startInd = [] # index of the start of a particle
     endInd = [] # index of the end of a particle
@@ -313,7 +313,7 @@ def hydro_viewer(imageFile, particleFile, plotDirectory, campaign, probeName, st
         partnumSubinds = partnumInds[frameInds==uniqueFrames[iter]]
         timeSubinds = timeInds[frameInds==uniqueFrames[iter]]
         data = get_imageData(imageFile, uniqueFrames[iter])
-        [partCount, boundaryInd, partStart, partEnd] = get_slice_endpoints(data, boundary, boundaryTime, invalidSlice)
+        [partCount, boundaryInd, partStart, partEnd] = get_slice_endpoints(probeName, data, boundary, boundaryTime, invalidSlice)
         img = image_buffer(data, probeName, boundaryInd)
         
         for particles in range(len(partSubinds)):
