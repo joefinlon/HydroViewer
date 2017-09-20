@@ -328,7 +328,7 @@ def hydro_viewer(imageFile, particleFile, plotDirectory, campaign, probeName, st
             else: # current particle DOES NOT fit within buffer, save current one and begin new one
                 imgTimeEnd = timeSubinds[particles]
                 image = smp.toimage(imgNew.T, cmin=0, cmax=3, pal=map, mode='P')
-                fileStr = '{}{}fr{}.{}_{}.png'.format(plotDirectory, probeName, imgNum, imgTimeStart, imgTimeEnd)
+                fileStr = '{}{}fr{:02d}.{}_{}.png'.format(plotDirectory, probeName, imgNum, imgTimeStart, imgTimeEnd)
                 image.save(fileStr)
                 imgPointer = 0; imgNum = imgNum + 1; imgNew = np.ones(bufferShape)
                 
