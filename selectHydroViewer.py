@@ -1,8 +1,10 @@
 ########## HYDROMETEOR VIEWER ##########
 # IMPORT PACKAGES
+import sys
 import numpy as np
 import xarray as xr
-import scipy.misc as smp
+from PIL import Image
+#import scipy.misc as smp
 #
 # IMAGE BUFFER & PLOTTING FUNCTIONS
 def probe_defaults(probeName):
@@ -54,8 +56,8 @@ def load_partData(inFile, probeName):
     return time, frame, partNum, length, longestY, width, dmax, drec, dell, area, perim, reject, habit, intArr
 
 def get_partInds(time, dmax, reject, habit, intArr, startTime, endTime, minD, maxD, intArrThresh, rejStatus, habitStatus):
-    if rejStatus is None:
-        if habitStatus is None:
+    if rejStatus=='None':
+        if habitStatus=='None':
             partInds = np.where((time>=startTime) & (time<endTime) & (dmax>=minD) & (dmax<maxD) &
                                 (intArr>=intArrThresh))[0]
         else:
@@ -80,7 +82,7 @@ def get_partInds(time, dmax, reject, habit, intArr, startTime, endTime, minD, ma
         if isinstance(rejStatus, int):
                 rejStatus = [rejStatus]
 
-        if habitStatus is None:
+        if habitStatus=='None':
             if len(rejStatus)==1:
                 partInds = np.where((time>=startTime) & (time<endTime) & (dmax>=minD) & (dmax<maxD) &
                                     (intArr>=intArrThresh) & (reject==rejStatus[0]))[0]
@@ -175,12 +177,14 @@ def get_slice_endpoints(probeName, buf, boundary, boundaryTime, invalidSlice): #
         
 def image_buffer(buf, probeName, boundaryInd): # generate matrix of 1's and 0's from buffer
     if probeName=='2DS' or probeName=='HVPS':
-        boundaryData = np.tile([2,2,1,1], 32) # alternate 1's and 2's for boundary slice (white & cyan pixels)
+        #boundaryData = np.tile([2,2,1,1], 32) # alternate 1's and 2's for boundary slice (white & cyan pixels)
+        boundaryData = np.tile([1,1,1,1], 32) # array of white pixels for boundary slice
         buf[buf==-1] = 0 # change invalid values to 0 (unshadowed segment)
+        #buf[buf==-1] = 255 # change invalid values to 255 (unshadowed segment)
         buf = 65535 - buf # 0: shadowed; 1: unshadowed
         
         # convert decimal to binary (8 image words for each slice)
-        imageData = np.ones([1700,128]) # set up image buffer (1's mean unshadowed pixels)
+        imageData = np.ones([1700,128]) # set up image buffer (1 means unshadowed pixels - RGB(255,255,255) is white
 
         for x in np.arange(buf.shape[0]):
             tempBuf = np.array([np.binary_repr(int(buf[x,0]),16), np.binary_repr(int(buf[x,1]),16),
@@ -193,11 +197,13 @@ def image_buffer(buf, probeName, boundaryInd): # generate matrix of 1's and 0's 
             sliceBuf = np.asarray(sliceBuf, dtype='int')
             imageData[x,:] = sliceBuf
     elif probeName=='CIP' or probeName=='PIP':
-        boundaryData = np.tile([2,2,1,1], 16) # alternate 1's and 2's for boundary slice (white & cyan pixels)
-        buf[buf==-1] = 255 # change invalid values to 0 (unshadowed segment)
+        #boundaryData = np.tile([2,2,1,1], 16) # alternate 1's and 2's for boundary slice (white & cyan pixels)
+        boundaryData = np.tile([1,1,1,1], 16) # array of white pixels for boundary slice
+        #buf[buf==-1] = 0 # change invalid values to 0 (unshadowed segment)
+        buf[buf==-1] = 255 # change invalid values to 1 (unshadowed segment)
         
         # convert decimal to binary (8 image words for each slice)
-        imageData = np.ones([1700,64]) # set up image buffer (1's mean unshadowed pixels)
+        imageData = np.ones([1700,64]) # set up image buffer (1 means unshadowed pixels - RGB(255,255,255) is white
 
         for x in np.arange(buf.shape[0]):
             tempBuf = np.array([np.binary_repr(int(buf[x,0]),8), np.binary_repr(int(buf[x,1]),8),
@@ -219,122 +225,147 @@ def image_buffer(buf, probeName, boundaryInd): # generate matrix of 1's and 0's 
     
     return(imageData)
 
-def hydro_viewer(imageFile, particleFile, plotDirectory, campaign, probeName, startTime=None, endTime=None,
-                 rejStatus=None, minD=None, maxD=None, intArrThresh=None, habitStatus=None):
-    '''
-    Main script that calls subroutines to plot particles meeting user-specified criteria.
-    
-    Parameters
-    ----------
-    imageFile: str
-        Path to decompressed data generated from read_binary_* script in UIOPS.
-    particleFile: str
-        Path to particle-by-particle data generated from imgProc_sm script in UIOPS.
-    plotDirectory: str
-        Path to save image strips to file.
-    campaign: str
-        Name of project (e.g., 'olympex'). Allows for project-specific conditional statements to be added to plotting routines.
-    probeName: str
-        Probe type ('2DS', 'HVPS', 'CIP', 'PIP'). Used in determining image decryption methods specific to the manufacturer.
-    startTime: str
-        Flight time to begin the plotting job in HHMMSS.
-    endTime: str
-        Flight time to end the plotting job in HHMMSS.
-    rejStatus: float tuple
-        Array of rejection status values (from image_auto_reject variable) of which to plot particles.
-            48 - accepted; 97 - aspect ratio > 6; 116 - aspect ratio > 5 + image touching edge;
-            112 - < 25% shadowed diodes in rectangle encompassing particle; 104, 72, 117 - hollow particle;
-            115 - split image; 122 - zero area image; 102 - zero area image
-    minD: float
-        Minimum particle size (mm) of which to plot particles.
-    maxD: float
-        Minimum particle size (mm) of which to plot particles.
-    intArrThresh: float
-        Minimum inter-arrival time (s) of which to plot particles.
-    habitStatus: float tuple
-        Array of habit type to use in particle plotting.
-            77 - zero image; 67 - center-out image; 116 - tiny; 111- oriented; 108 - linear; 97 - aggregate;
-            103 - graupel; 115 - sphere; 104 - hexagonal; 105 - irregular; 100 - dendrite
-    '''
-    
-    map = np.empty((3,3),dtype=np.uint8)
-    map[0,:] = [0, 0, 0]; map[1,:] = [255, 255, 255]; map[2,:] = [0, 255, 255] # [black, white, cyan]
-    [boundary, boundaryTime, invalidSlice, bufferShape] = probe_defaults(probeName)
-    
-    [time, frame, partNum, length, longestY, width, dmax, drec, dell, area, perim, reject, habit, intArr] = load_partData(
-        particleFile, probeName) # load Particle Data
-    
-    # ---------- Initialize Particle Criteria ----------
-    if startTime is None:
-        startTime = int(time[0])
-    else:
-        startTime = int(startTime)
+# ===== MAIN SCRIPT ===== #
+'''
+Main script that calls subroutines to plot particles meeting user-specified criteria.
 
-    if endTime is None:
-        endTime = int(time[-1])
-    else:
-        endTime = int(endTime)
+Parameters
+----------
+imageFile: str
+    Path to decompressed data generated from read_binary_* script in UIOPS.
+particleFile: str
+    Path to particle-by-particle data generated from imgProc_sm script in UIOPS.
+plotDirectory: str
+    Path to save image strips to file.
+campaign: str
+    Name of project (e.g., 'olympex'). Allows for project-specific conditional statements to be added to plotting routines.
+probeName: str
+    Probe type ('2DS', 'HVPS', 'CIP', 'PIP'). Used in determining image decryption methods specific to the manufacturer.
+startTime: str
+    Flight time to begin the plotting job in HHMMSS.
+endTime: str
+    Flight time to end the plotting job in HHMMSS.
+rejStatus: float tuple
+    Array of rejection status values (from image_auto_reject variable) of which to plot particles.
+        48 - accepted; 97 - aspect ratio > 6; 116 - aspect ratio > 5 + image touching edge;
+        112 - < 25% shadowed diodes in rectangle encompassing particle; 104, 72, 117 - hollow particle;
+        115 - split image; 122 - zero area image; 102 - zero area image
+minD: float
+    Minimum particle size (mm) of which to plot particles.
+maxD: float
+    Minimum particle size (mm) of which to plot particles.
+intArrThresh: float
+    Minimum inter-arrival time (s) of which to plot particles.
+habitStatus: float tuple
+    Array of habit type to use in particle plotting.
+        77 - zero image; 67 - center-out image; 116 - tiny; 111- oriented; 108 - linear; 97 - aggregate;
+        103 - graupel; 115 - sphere; 104 - hexagonal; 105 - irregular; 100 - dendrite
+'''
+imageFile = sys.argv[1]
+particleFile = sys.argv[2]
+plotDirectory = sys.argv[3]
+campaign = sys.argv[4]
+probeName = sys.argv[5]
+startTime = sys.argv[6]
+endTime = sys.argv[7]
+rejStatus = sys.argv[8]
+minD = sys.argv[9]
+maxD = sys.argv[10]
+intArrThresh = sys.argv[11]
+habitStatus = sys.argv[12]
 
-    if minD is None:
-        minD = 0.
+#map = np.empty((3,3),dtype=np.uint8)
+#map[0,:] = [0, 0, 0]; map[1,:] = [255, 255, 255]; map[2,:] = [0, 255, 255] # [black, white, cyan]
+[boundary, boundaryTime, invalidSlice, bufferShape] = probe_defaults(probeName)
 
-    if maxD is None:
-        maxD = 999.
+[time, frame, partNum, length, longestY, width, dmax, drec, dell, area, perim, reject, habit, intArr] = load_partData(
+    particleFile, probeName) # load Particle Data
 
-    if intArrThresh is None:
-        intArrThresh = -999.
+# ---------- Initialize Particle Criteria ----------
+if startTime=='None':
+    startTime = int(time[0])
+else:
+    startTime = int(startTime)
+
+if endTime=='None':
+    endTime = int(time[-1])
+else:
+    endTime = int(endTime)
+
+if rejStatus!='None':
+    rejStatus = np.array(rejStatus.split(','), dtype=np.uint8)
+
+if minD=='None':
+    minD = 0.
+else:
+    minD = np.float(minD)
+
+if maxD=='None':
+    maxD = 999.
+else:
+    maxD = np.float(maxD)
+
+if intArrThresh=='None':
+    intArrThresh = -999.
+else:
+    intArrThresh = np.float(intArrThresh)
     
-    print('----- USER DEFINED VALUES -----')
-    print('startTime = {}; endTime = {}\nminD = {} mm; maxD = {} mm\nintArrThresh = {} s; rejStatus = {}; habitStatus = {}'
-          .format(startTime, endTime, minD, maxD, intArrThresh, rejStatus, habitStatus))
-    print('-------------------------------')
-    # --------------------------------------------------
-    
-    # particle indices meeting user criteria
-    partInds = get_partInds(time, dmax, reject, habit, intArr, startTime, endTime, minD, maxD, intArrThresh, rejStatus,
-                            habitStatus)
-    frameInds = frame[partInds] # frame number of particles meeting user criteria
-    partnumInds = partNum[partInds]
-    timeInds = time[partInds]
-    print('Found {} particles that match your criteria.'.format(len(partInds)))
-    print('Constructing image buffers. Estimating ~ {} files will be generated.'.format(
-        (np.sum(length[partInds])+len(partInds))/1700))
-    
-    uniqueFrames = np.unique(frameInds)
-    
-    imgPointer = 0
-    imgNum = 1
-    imgNew = np.ones(bufferShape) # set up image buffer (1's mean unshadowed pixels)
-    
-    #
-    # LOOP THROUGH FRAMES FOR PLOTTING
-    for iter in range(len(uniqueFrames)):
-        partSubinds = partInds[frameInds==uniqueFrames[iter]] # good particles for current frame in plotting loop
-        partnumSubinds = partnumInds[frameInds==uniqueFrames[iter]]
-        timeSubinds = timeInds[frameInds==uniqueFrames[iter]]
-        data = get_imageData(imageFile, uniqueFrames[iter])
-        [partCount, boundaryInd, partStart, partEnd] = get_slice_endpoints(probeName, data, boundary, boundaryTime, invalidSlice)
-        img = image_buffer(data, probeName, boundaryInd)
-        
-        for particles in range(len(partSubinds)):
-            img_sub = np.array(img[partStart[partnumSubinds[particles]-1]:partEnd[partnumSubinds[particles]-1]+2,:],
-                               dtype=np.uint8)
-            
-            if imgPointer+img_sub.shape[0]<bufferShape[0]: # current particle fits within buffer
-                if imgPointer==0: # indicates we're starting a new image buffer to plot
-                    imgTimeStart = timeSubinds[particles]
-                imgNew[imgPointer:imgPointer+img_sub.shape[0],:] = img_sub
-                imgPointer = imgPointer + img_sub.shape[0];
-            else: # current particle DOES NOT fit within buffer, save current one and begin new one
-                imgTimeEnd = timeSubinds[particles]
-                image = smp.toimage(imgNew.T, cmin=0, cmax=3, pal=map, mode='P')
-                fileStr = '{}{}fr{:02d}.{}_{}.png'.format(plotDirectory, probeName, imgNum, imgTimeStart, imgTimeEnd)
-                image.save(fileStr)
-                imgPointer = 0; imgNum = imgNum + 1; imgNew = np.ones(bufferShape)
-                
+if habitStatus!='None':
+    habitStatus = np.array(habitStatus.split(','), dtype=np.uint8)
+
+print('----- USER DEFINED VALUES -----')
+print('startTime = {}; endTime = {}\nminD = {} mm; maxD = {} mm\nintArrThresh = {} s; rejStatus = {}; habitStatus = {}'
+      .format(startTime, endTime, minD, maxD, intArrThresh, rejStatus, habitStatus))
+print('-------------------------------')
+# --------------------------------------------------
+
+# particle indices meeting user criteria
+partInds = get_partInds(time, dmax, reject, habit, intArr, startTime, endTime, minD, maxD, intArrThresh, rejStatus,
+                        habitStatus)
+frameInds = frame[partInds] # frame number of particles meeting user criteria
+partnumInds = partNum[partInds]
+timeInds = time[partInds]
+print('Found {} particles that match your criteria.'.format(len(partInds)))
+print('Constructing image buffers. Estimating ~ {} files will be generated.'.format(
+    int(np.ceil((np.sum(length[partInds])+len(partInds))/1700))))
+
+uniqueFrames = np.unique(frameInds)
+
+imgPointer = 0
+imgNum = 1
+imgNew = np.ones(bufferShape) # set up image buffer (1's mean unshadowed pixels)
+
+#
+# LOOP THROUGH FRAMES FOR PLOTTING
+for iter in range(len(uniqueFrames)):
+    partSubinds = partInds[frameInds==uniqueFrames[iter]] # good particles for current frame in plotting loop
+    partnumSubinds = partnumInds[frameInds==uniqueFrames[iter]]
+    timeSubinds = timeInds[frameInds==uniqueFrames[iter]]
+    data = get_imageData(imageFile, uniqueFrames[iter])
+    [partCount, boundaryInd, partStart, partEnd] = get_slice_endpoints(probeName, data, boundary, boundaryTime, invalidSlice)
+    img = image_buffer(data, probeName, boundaryInd)
+
+    for particles in range(len(partSubinds)):
+        #img_sub = np.array(img[partStart[partnumSubinds[particles]-1]:partEnd[partnumSubinds[particles]-1]+2,:],dtype=np.uint8)
+        img_sub = np.array(255*img[partStart[partnumSubinds[particles]-1]:partEnd[partnumSubinds[particles]-1]+2,:],
+                           dtype=np.uint8)
+
+        if imgPointer+img_sub.shape[0]<bufferShape[0]: # current particle fits within buffer
+            if imgPointer==0: # indicates we're starting a new image buffer to plot
                 imgTimeStart = timeSubinds[particles]
-                imgNew[imgPointer:imgPointer+img_sub.shape[0],:] = img_sub
-                imgPointer = imgPointer + img_sub.shape[0]
-                
-            if np.remainder(imgNum+1,1000)==0:
-                print('Finished plotting buffer # {}.'.format(imgNum))
+            imgNew[imgPointer:imgPointer+img_sub.shape[0],:] = img_sub
+            imgPointer = imgPointer + img_sub.shape[0];
+        else: # current particle DOES NOT fit within buffer, save current one and begin new one
+            imgTimeEnd = timeSubinds[particles]
+            #image = smp.toimage(imgNew.T, cmin=0, cmax=3, pal=map, mode='P')
+            fileStr = '{}{}fr{:02d}.{}_{}.png'.format(plotDirectory, probeName, imgNum, imgTimeStart, imgTimeEnd)
+            Image.fromarray(imgNew.T.astype(np.uint8)).save(fileStr) # using PIL instead of scipy.misc.toimage
+            #image.save(fileStr)
+            imgPointer = 0; imgNum = imgNum + 1; imgNew = np.ones(bufferShape)
+
+            imgTimeStart = timeSubinds[particles]
+            imgNew[imgPointer:imgPointer+img_sub.shape[0],:] = img_sub
+            imgPointer = imgPointer + img_sub.shape[0]
+
+        if np.remainder(imgNum+1,1000)==0:
+            print('Finished plotting buffer # {}.'.format(imgNum))
